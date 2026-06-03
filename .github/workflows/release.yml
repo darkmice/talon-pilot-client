@@ -30,10 +30,11 @@ jobs:
       matrix:
         include:
           # Linux:在 glibc 2.35(22.04)上编 + glibc-2.38 shim,产物可跑 glibc ≥2.35 的发行版。
-          - { os: ubuntu-22.04, target: linux-x64, shim: true }
-          - { os: macos-14, target: macos-arm64, shim: false }
-          - { os: macos-13, target: macos-x64, shim: false }
-          - { os: windows-latest, target: windows-x64, shim: false }
+          - { os: ubuntu-22.04, target: linux-x64, rust_target: x86_64-unknown-linux-gnu, shim: true }
+          - { os: macos-14, target: macos-arm64, rust_target: aarch64-apple-darwin, shim: false }
+          # Intel mac:在 arm64 runner 上交叉编译 x86_64,避开稀缺/排不到的 macos-13 Intel runner。
+          - { os: macos-14, target: macos-x64, rust_target: x86_64-apple-darwin, shim: false }
+          - { os: windows-latest, target: windows-x64, rust_target: x86_64-pc-windows-msvc, shim: false }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -85,26 +86,29 @@ jobs:
         with:
           workspaces: build/talon-pilot
 
+      - name: Add rust target
+        run: rustup target add ${{ matrix.rust_target }}
+
       - name: Build tp-agent (Linux + glibc shim)
         if: matrix.shim
         run: |
           set -euo pipefail
           cc -c -fPIC -O2 "$GITHUB_WORKSPACE/scripts/glibc23-shim.c" -o /tmp/glibc23-shim.o
           cd build/talon-pilot
-          cargo rustc -p pilot-agent --release --bin tp-agent -- -Clink-arg=/tmp/glibc23-shim.o
+          cargo rustc -p pilot-agent --release --target ${{ matrix.rust_target }} --bin tp-agent -- -Clink-arg=/tmp/glibc23-shim.o
 
-      - name: Build tp-agent (macOS / Windows)
+      - name: Build tp-agent (cross / native)
         if: ${{ !matrix.shim }}
         run: |
           set -euo pipefail
           cd build/talon-pilot
-          cargo build --release --bin tp-agent
+          cargo build --release --target ${{ matrix.rust_target }} --bin tp-agent
 
       - name: Package
         run: |
           set -euo pipefail
           mkdir -p dist
-          cd build/talon-pilot/target/release
+          cd build/talon-pilot/target/${{ matrix.rust_target }}/release
           if [ "${{ runner.os }}" = "Windows" ]; then
             7z a "$GITHUB_WORKSPACE/dist/tp-agent-${{ matrix.target }}.zip" tp-agent.exe
           else
