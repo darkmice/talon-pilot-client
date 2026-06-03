@@ -1,0 +1,126 @@
+name: build-tp-agent
+
+# tp-agent(Talon Pilot 本地 edge 客户端)跨平台构建 + 发布。
+#
+# 源码来自私有主仓(地址 + token 走 secret:MAIN_REPO_HOST / XGIT_TOKEN)+ 公开引擎仓
+# talon-bin(github.com/darkmice/talon-bin,免 token;libtalon 由 talon-sys build.rs
+# 从其公开 release 下载)。main 分支不引 SDK,故无需 talon-sandbox-sdk。
+#
+# 触发:手动(workflow_dispatch)或推 tag(v*,会顺带发 Release)。
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "talon-pilot 主仓的分支/tag(默认 main)"
+        default: main
+  push:
+    tags: ["v*"]
+
+env:
+  # 引擎仓(公开)。主仓地址 + token 走 secret(MAIN_REPO_HOST / XGIT_TOKEN),
+  # 不写死在公开仓里。
+  TALON_BIN_REPO: https://github.com/darkmice/talon-bin.git
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux:在 glibc 2.35(22.04)上编 + glibc-2.38 shim,产物可跑 glibc ≥2.35 的发行版。
+          - { os: ubuntu-22.04, target: linux-x64, shim: true }
+          - { os: macos-14, target: macos-arm64, shim: false }
+          - { os: macos-13, target: macos-x64, shim: false }
+          - { os: windows-latest, target: windows-x64, shim: false }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout client repo (workflow + shim)
+        uses: actions/checkout@v4
+
+      - name: Clone sources (main repo + talon-bin) as siblings
+        run: |
+          set -euo pipefail
+          REF="${{ github.event.inputs.ref || 'main' }}"
+          mkdir -p build && cd build
+          echo "::group::clone talon-pilot ($REF)"
+          git clone --depth 1 --branch "$REF" \
+            "https://oauth2:${{ secrets.XGIT_TOKEN }}@${{ secrets.MAIN_REPO_HOST }}" talon-pilot \
+            || git clone --depth 1 "https://oauth2:${{ secrets.XGIT_TOKEN }}@${{ secrets.MAIN_REPO_HOST }}" talon-pilot
+          echo "::endgroup::"
+          echo "::group::clone talon-bin (engine, public)"
+          git clone --depth 1 "${TALON_BIN_REPO}" talon-bin
+          # 只留 talon-sys:删掉 talon-bundle* 避免 build.rs 误走"本地源码编引擎"
+          # (那条要 superclaw-db 等未克隆的私有仓),强制走公开 release 下载 libtalon。
+          rm -rf talon-bin/talon-bundle talon-bin/talon-bundle-evocore
+          echo "::endgroup::"
+
+      - name: Rewrite hardcoded talon-sys path (absolute -> sibling)
+        run: |
+          set -euo pipefail
+          cd build/talon-pilot
+          perl -i -pe 's{path\s*=\s*"/Users/[^"]*/talon-bin/talon-sys"}{path = "../../../talon-bin/talon-sys"}' \
+            crates/pilot-storage/Cargo.toml
+          echo "talon-sys 依赖行:"; grep talon-sys crates/pilot-storage/Cargo.toml
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: build/talon-pilot
+
+      - name: Build tp-agent (Linux + glibc shim)
+        if: matrix.shim
+        run: |
+          set -euo pipefail
+          cc -c -fPIC -O2 "$GITHUB_WORKSPACE/scripts/glibc23-shim.c" -o /tmp/glibc23-shim.o
+          cd build/talon-pilot
+          cargo rustc -p pilot-agent --release --bin tp-agent -- -Clink-arg=/tmp/glibc23-shim.o
+
+      - name: Build tp-agent (macOS / Windows)
+        if: ${{ !matrix.shim }}
+        run: |
+          set -euo pipefail
+          cd build/talon-pilot
+          cargo build --release --bin tp-agent
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cd build/talon-pilot/target/release
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "$GITHUB_WORKSPACE/dist/tp-agent-${{ matrix.target }}.zip" tp-agent.exe
+          else
+            tar czf "$GITHUB_WORKSPACE/dist/tp-agent-${{ matrix.target }}.tar.gz" tp-agent
+          fi
+          ls -la "$GITHUB_WORKSPACE/dist"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tp-agent-${{ matrix.target }}
+          path: dist/*
+
+  release:
+    name: publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
