@@ -57,6 +57,13 @@ jobs:
           # 只留 talon-sys:删掉 talon-bundle* 避免 build.rs 误走"本地源码编引擎"
           # (那条要 superclaw-db 等未克隆的私有仓),强制走公开 release 下载 libtalon。
           rm -rf talon-bin/talon-bundle talon-bin/talon-bundle-evocore
+          # 防御:上游 darkmice/talon-bin 的 talon-sys/build.rs L69 当前有一处 find-replace
+          # 写崩的损坏(const TALON_LIB_VERSION: TALON_LIB_VERSION: ...),会让 talon-sys 编不过。
+          # 仅在检测到损坏时临时修正;上游修好后此处自动跳过(no-op)。
+          if grep -q 'TALON_LIB_VERSION: TALON_LIB_VERSION' talon-bin/talon-sys/build.rs; then
+            echo "⚠️ talon-bin build.rs L69 上游损坏,临时修正为 const TALON_LIB_VERSION: &str = \"0.1.39\";"
+            perl -i -pe 's{^(\s*)const TALON_LIB_VERSION:.*$}{$1const TALON_LIB_VERSION: &str = "0.1.39";}' talon-bin/talon-sys/build.rs
+          fi
           echo "::endgroup::"
           echo "::group::clone talon-sandbox-sdk-rust (SDK, public; main 的 cloud_preview path 依赖)"
           git clone --depth 1 "${TALON_SDK_REPO}" talon-sandbox-sdk-rust
