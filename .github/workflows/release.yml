@@ -21,6 +21,10 @@ env:
   # 公开依赖仓。主仓地址 + token 走 secret(MAIN_REPO_HOST / XGIT_TOKEN),不写死在公开仓里。
   TALON_BIN_REPO: https://github.com/darkmice/talon-bin.git
   TALON_SDK_REPO: https://github.com/talon-org/talon-sandbox-sdk-rust.git
+  # release 版默认连的线上地址(build-time 注入;pilot-agent 用 option_env 读,
+  # 本地 cargo build 无此 env 时仍默认 localhost)。
+  TP_DEFAULT_API_BASE: https://agents.deeplan.ai
+  TP_DEFAULT_WEB_BASE: https://agents.deeplan.ai
 
 jobs:
   build:

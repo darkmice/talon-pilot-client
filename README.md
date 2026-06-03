@@ -9,38 +9,35 @@ dev server 与终端 PTY。无需公网暴露本机。
 
 ## 安装
 
-到 [Releases](../../releases) 下对应平台的包,解压后把 `tp-agent` 放进 PATH:
+**一键安装(推荐)**
 
-| 平台 | 包 |
-|------|-----|
-| macOS (Apple Silicon) | `tp-agent-macos-arm64.tar.gz` |
-| macOS (Intel) | `tp-agent-macos-x64.tar.gz` |
-| Linux (x64, glibc ≥ 2.35) | `tp-agent-linux-x64.tar.gz` |
-| Windows (x64) | `tp-agent-windows-x64.zip` |
-
-```bash
-# macOS / Linux 示例
-tar xzf tp-agent-macos-arm64.tar.gz
-sudo mv tp-agent /usr/local/bin/
-tp-agent --help
+macOS / Linux:
+```sh
+curl -fsSL https://agents.deeplan.ai/install.sh | sh
 ```
+
+Windows(PowerShell):
+```powershell
+irm https://agents.deeplan.ai/install.ps1 | iex
+```
+
+**手动下载**:到 [Releases](../../releases) 下对应平台的包,解压把 `tp-agent` 放进 PATH。
+(macOS arm64/x64 · Linux x64,glibc ≥ 2.35 · Windows x64)
 
 ## 注册到线上环境
 
+release 版**已默认连 agents.deeplan.ai**,装完直接:
+
 ```bash
-tp-agent login \
-  --api-base-url https://agents.deeplan.ai \
-  --web-base-url https://agents.deeplan.ai
+tp-agent login
 ```
 
-浏览器会打开 Talon Pilot 完成授权(需先用邮箱登录过),tp-agent 拿到 CLI key 后自动注册
-为 edge node 并转后台 daemon。之后本机会出现在 Web 端「已注册的本地 Agent」列表中。
+浏览器会打开完成授权(需先用邮箱登录过 Talon Pilot),tp-agent 拿到 CLI key 后自动注册
+为 edge node 并转后台 daemon,本机随即出现在 Web 端「已注册的本地 Agent」列表中。
 
-- 无浏览器 / CI:`tp-agent login --key <ApiKey> --api-base-url https://agents.deeplan.ai`
+- 无浏览器 / CI:`tp-agent login --key <ApiKey>`
+- 连别的环境(如本地 dev):`tp-agent login --api-base-url http://127.0.0.1:3100 --web-base-url http://127.0.0.1:5174`
 - 常用:`tp-agent status` / `tp-agent stop` / `tp-agent accounts list`
-
-> 默认连本地 `http://127.0.0.1:3100`(开发用)。连线上务必带 `--api-base-url` /
-> `--web-base-url`。
 
 ## 构建(维护者)
 
