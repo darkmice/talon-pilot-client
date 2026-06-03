@@ -50,8 +50,9 @@ Secrets and variables → Actions** 配两个 secret:
 - `MAIN_REPO_HOST` — 私有主仓的 clone 主机+路径(形如 `<host>/<owner>/talon-pilot.git`)。
 - `XGIT_TOKEN` — 对该主仓有**读权限**的 access token。Actions 用它 clone 主仓源码。
 
-引擎仓 `talon-bin`(含 `talon-sys` + libtalon)是公开的,免 token;libtalon 由
-`talon-sys` 的 build.rs 从其公开 release 自动下载。main 分支不引 SDK,故无需其它私有仓。
+两个公开依赖仓,Actions 自动 clone、免 token:
+- `talon-bin`(含 `talon-sys` + libtalon):libtalon 由 build.rs 从其公开 release 自动下载。
+- `talon-sandbox-sdk-rust`(`talon-org`):main 的云端预览依赖它(path 依赖)。
 
 手动构建:Actions → **build-tp-agent** → Run workflow(可填分支)。
 发版:推一个 `v*` tag,会自动构建并发 Release。

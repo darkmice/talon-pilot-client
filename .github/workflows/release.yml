@@ -2,9 +2,10 @@ name: build-tp-agent
 
 # tp-agent(Talon Pilot 本地 edge 客户端)跨平台构建 + 发布。
 #
-# 源码来自私有主仓(地址 + token 走 secret:MAIN_REPO_HOST / XGIT_TOKEN)+ 公开引擎仓
-# talon-bin(github.com/darkmice/talon-bin,免 token;libtalon 由 talon-sys build.rs
-# 从其公开 release 下载)。main 分支不引 SDK,故无需 talon-sandbox-sdk。
+# 源码来自私有主仓(地址 + token 走 secret:MAIN_REPO_HOST / XGIT_TOKEN)+ 两个公开仓:
+# - talon-bin(github.com/darkmice/talon-bin):含 talon-sys;libtalon 由 build.rs 从其公开 release 下载。
+# - talon-sandbox-sdk-rust(github.com/talon-org):main 的云端预览(cloud_preview)依赖它(path 依赖)。
+# 两个公开仓都免 token。
 #
 # 触发:手动(workflow_dispatch)或推 tag(v*,会顺带发 Release)。
 on:
@@ -17,9 +18,9 @@ on:
     tags: ["v*"]
 
 env:
-  # 引擎仓(公开)。主仓地址 + token 走 secret(MAIN_REPO_HOST / XGIT_TOKEN),
-  # 不写死在公开仓里。
+  # 公开依赖仓。主仓地址 + token 走 secret(MAIN_REPO_HOST / XGIT_TOKEN),不写死在公开仓里。
   TALON_BIN_REPO: https://github.com/darkmice/talon-bin.git
+  TALON_SDK_REPO: https://github.com/talon-org/talon-sandbox-sdk-rust.git
 
 jobs:
   build:
@@ -56,6 +57,9 @@ jobs:
           # 只留 talon-sys:删掉 talon-bundle* 避免 build.rs 误走"本地源码编引擎"
           # (那条要 superclaw-db 等未克隆的私有仓),强制走公开 release 下载 libtalon。
           rm -rf talon-bin/talon-bundle talon-bin/talon-bundle-evocore
+          echo "::endgroup::"
+          echo "::group::clone talon-sandbox-sdk-rust (SDK, public; main 的 cloud_preview path 依赖)"
+          git clone --depth 1 "${TALON_SDK_REPO}" talon-sandbox-sdk-rust
           echo "::endgroup::"
 
       - name: Rewrite hardcoded talon-sys path (absolute -> sibling)
