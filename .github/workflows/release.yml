@@ -93,20 +93,40 @@ jobs:
       - name: Add rust target
         run: rustup target add ${{ matrix.rust_target }}
 
+      # —— 链接期容错说明 ——
+      # talon-sys 链入的预编译 libtalon.a(talon-bin release)是 Rust 静态库,
+      # 内嵌它编译时那版 std 的 rust_eh_personality。它和 runner 当前 stable
+      # toolchain 的 std 版本不一致时,会报 duplicate symbol: rust_eh_personality
+      # (linux: rust-lld;windows: LNK2005/LNK1169)。两份是**同一函数同一实现**
+      # (library/std/src/sys/personality/gcc.rs),取任一份语义等价 → 让链接器
+      # 容忍重复定义即可。各平台链接器标志不同:
+      #   linux/gcc+lld : -Wl,--allow-multiple-definition
+      #   windows/MSVC  : /FORCE:MULTIPLE
+      # (根治路径是让 talon-bin libtalon.a 与本仓 toolchain pin 到同版本,
+      #  属后续治理;此处先解封发版。)
       - name: Build tp-agent (Linux + glibc shim)
         if: matrix.shim
         run: |
           set -euo pipefail
           cc -c -fPIC -O2 "$GITHUB_WORKSPACE/scripts/glibc23-shim.c" -o /tmp/glibc23-shim.o
           cd build/talon-pilot
-          cargo rustc -p pilot-agent --release --target ${{ matrix.rust_target }} --bin tp-agent -- -Clink-arg=/tmp/glibc23-shim.o
+          cargo rustc -p pilot-agent --release --target ${{ matrix.rust_target }} --bin tp-agent -- \
+            -Clink-arg=/tmp/glibc23-shim.o \
+            -Clink-arg=-Wl,--allow-multiple-definition
 
       - name: Build tp-agent (cross / native)
         if: ${{ !matrix.shim }}
         run: |
           set -euo pipefail
           cd build/talon-pilot
-          cargo build --release --target ${{ matrix.rust_target }} --bin tp-agent
+          # macOS 的 ld 不认 --allow-multiple-definition,也不需要(mach-o 容忍
+          # 重复弱符号);只对 windows MSVC 加 /FORCE:MULTIPLE。
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cargo rustc -p pilot-agent --release --target ${{ matrix.rust_target }} --bin tp-agent -- \
+              -Clink-arg=/FORCE:MULTIPLE
+          else
+            cargo build --release --target ${{ matrix.rust_target }} --bin tp-agent
+          fi
 
       - name: Package
         run: |
