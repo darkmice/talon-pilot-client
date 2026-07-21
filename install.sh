@@ -2,10 +2,11 @@
 # Talon Pilot · tp-agent 一键安装(macOS / Linux)。
 #   curl -fsSL https://agents.deeplan.ai/install.sh | sh
 #
-# 从 GitHub Release 下对应平台的 tp-agent 装进 PATH,装完(可交互时)自动登录。
+# 从 GitHub Release 下对应平台的 tp-agent 装进 PATH,随后自动准备默认的
+# Open Interpreter runtime,最后在可交互终端里自动登录。
 set -e
 
-REPO="darkmice/talon-pilot-client"
+REPO="${TP_AGENT_REPO:-darkmice/talon-pilot-client}"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
@@ -25,7 +26,7 @@ case "${OS}-${ARCH}" in
   *) echo "${C_YELLOW}不支持的平台: ${OS}-${ARCH}${C_RESET}(目前支持 macOS arm64/x64、Linux x64)" >&2; exit 1 ;;
 esac
 
-URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
+URL="${TP_AGENT_ASSET_URL:-https://github.com/${REPO}/releases/latest/download/${ASSET}}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -33,8 +34,10 @@ printf '%s↓%s 下载 tp-agent %s(%s)%s…\n' "$C_BLUE" "$C_RESET" "$C_DIM" "$A
 curl -fsSL "$URL" -o "$TMP/$ASSET"
 tar -xzf "$TMP/$ASSET" -C "$TMP"
 
-DEST="/usr/local/bin"
-[ -w "$DEST" ] || DEST="$HOME/.local/bin"
+DEST="${TP_AGENT_INSTALL_DIR:-/usr/local/bin}"
+if [ -z "${TP_AGENT_INSTALL_DIR:-}" ] && [ ! -w "$DEST" ]; then
+  DEST="$HOME/.local/bin"
+fi
 mkdir -p "$DEST"
 install -m 0755 "$TMP/tp-agent" "$DEST/tp-agent" 2>/dev/null \
   || { cp "$TMP/tp-agent" "$DEST/tp-agent"; chmod +x "$DEST/tp-agent"; }
@@ -48,6 +51,16 @@ case ":$PATH:" in
      printf '%s⚠%s %s 不在 PATH,请加入:  %sexport PATH="%s:$PATH"%s\n' \
        "$C_YELLOW" "$C_RESET" "$DEST" "$C_CYAN" "$DEST" "$C_RESET" ;;
 esac
+
+# Open Interpreter 是 Talon 的默认 runtime。由刚安装好的 tp-agent 做幂等
+# bootstrap:已有兼容的 `interpreter acp` 就复用,否则下载 Talon 已验证的官方
+# checksum-backed release。失败时安装器返回非零,不把“只有壳、不能执行”误报成完成。
+printf '\n%s→%s 准备默认 runtime: Open Interpreter…\n' "$C_BLUE" "$C_RESET"
+if ! "$BIN" runtime ensure; then
+  printf '%s✗%s Open Interpreter 安装或验证失败。修复网络后可重跑安装器，或执行: %s%s runtime ensure%s\n' \
+    "$C_YELLOW" "$C_RESET" "$C_CYAN" "$BIN" "$C_RESET" >&2
+  exit 1
+fi
 
 # 装完直接进登录,省掉用户再敲一条命令。
 # 仅在**可交互终端**才自动跑(login 会弹浏览器走 OAuth,要 tty)。
