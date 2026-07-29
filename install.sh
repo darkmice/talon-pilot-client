@@ -2,8 +2,8 @@
 # Talon Pilot · tp-agent 一键安装(macOS / Linux)。
 #   curl -fsSL https://agents.deeplan.ai/install.sh | sh
 #
-# 从 GitHub Release 下对应平台的 tp-agent 装进 PATH,随后自动准备默认的
-# Open Interpreter runtime,最后在可交互终端里自动登录。
+# 从 GitHub Release 下对应平台的 tp-agent + 控制面辅助命令 tp 装进 PATH,
+# 随后自动准备默认的 Open Interpreter runtime,最后在可交互终端里自动登录。
 set -e
 
 REPO="${TP_AGENT_REPO:-darkmice/talon-pilot-client}"
@@ -33,17 +33,29 @@ trap 'rm -rf "$TMP"' EXIT
 printf '%s↓%s 下载 tp-agent %s(%s)%s…\n' "$C_BLUE" "$C_RESET" "$C_DIM" "$ASSET" "$C_RESET"
 curl -fsSL "$URL" -o "$TMP/$ASSET"
 tar -xzf "$TMP/$ASSET" -C "$TMP"
+[ -f "$TMP/tp-agent" ] || {
+  echo "${C_YELLOW}安装包缺少 tp-agent，拒绝安装${C_RESET}" >&2
+  exit 1
+}
+[ -f "$TMP/tp" ] || {
+  echo "${C_YELLOW}安装包缺少配套控制面命令 tp，拒绝安装${C_RESET}" >&2
+  exit 1
+}
 
 DEST="${TP_AGENT_INSTALL_DIR:-/usr/local/bin}"
 if [ -z "${TP_AGENT_INSTALL_DIR:-}" ] && [ ! -w "$DEST" ]; then
   DEST="$HOME/.local/bin"
 fi
 mkdir -p "$DEST"
+install -m 0755 "$TMP/tp" "$DEST/tp" 2>/dev/null \
+  || { cp "$TMP/tp" "$DEST/tp"; chmod +x "$DEST/tp"; }
 install -m 0755 "$TMP/tp-agent" "$DEST/tp-agent" 2>/dev/null \
   || { cp "$TMP/tp-agent" "$DEST/tp-agent"; chmod +x "$DEST/tp-agent"; }
 
 BIN="$DEST/tp-agent"
+TP_BIN="$DEST/tp"
 printf '%s✓%s 已安装: %s%s%s\n' "$C_GREEN" "$C_RESET" "$C_BOLD" "$BIN" "$C_RESET"
+printf '%s✓%s 已安装: %s%s%s\n' "$C_GREEN" "$C_RESET" "$C_BOLD" "$TP_BIN" "$C_RESET"
 
 case ":$PATH:" in
   *":$DEST:"*) PATH_OK=1 ;;

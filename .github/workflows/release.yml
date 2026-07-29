@@ -104,17 +104,19 @@ jobs:
       #   windows/MSVC  : /FORCE:MULTIPLE
       # (根治路径是让 talon-bin libtalon.a 与本仓 toolchain pin 到同版本,
       #  属后续治理;此处先解封发版。)
-      - name: Build tp-agent (Linux + glibc shim)
+      - name: Build tp-agent + tp (Linux + glibc shim)
         if: matrix.shim
         run: |
           set -euo pipefail
           cc -c -fPIC -O2 "$GITHUB_WORKSPACE/scripts/glibc23-shim.c" -o /tmp/glibc23-shim.o
           cd build/talon-pilot
-          cargo rustc -p pilot-agent --release --target ${{ matrix.rust_target }} --bin tp-agent -- \
-            -Clink-arg=/tmp/glibc23-shim.o \
-            -Clink-arg=-Wl,--allow-multiple-definition
+          for bin in tp-agent tp; do
+            cargo rustc -p pilot-agent --release --target ${{ matrix.rust_target }} --bin "$bin" -- \
+              -Clink-arg=/tmp/glibc23-shim.o \
+              -Clink-arg=-Wl,--allow-multiple-definition
+          done
 
-      - name: Build tp-agent (cross / native)
+      - name: Build tp-agent + tp (cross / native)
         if: ${{ !matrix.shim }}
         run: |
           set -euo pipefail
@@ -122,10 +124,12 @@ jobs:
           # macOS 的 ld 不认 --allow-multiple-definition,也不需要(mach-o 容忍
           # 重复弱符号);只对 windows MSVC 加 /FORCE:MULTIPLE。
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cargo rustc -p pilot-agent --release --target ${{ matrix.rust_target }} --bin tp-agent -- \
-              -Clink-arg=/FORCE:MULTIPLE
+            for bin in tp-agent tp; do
+              cargo rustc -p pilot-agent --release --target ${{ matrix.rust_target }} --bin "$bin" -- \
+                -Clink-arg=/FORCE:MULTIPLE
+            done
           else
-            cargo build --release --target ${{ matrix.rust_target }} --bin tp-agent
+            cargo build --release --target ${{ matrix.rust_target }} --bin tp-agent --bin tp
           fi
 
       - name: Package
@@ -134,9 +138,9 @@ jobs:
           mkdir -p dist
           cd build/talon-pilot/target/${{ matrix.rust_target }}/release
           if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "$GITHUB_WORKSPACE/dist/tp-agent-${{ matrix.target }}.zip" tp-agent.exe
+            7z a "$GITHUB_WORKSPACE/dist/tp-agent-${{ matrix.target }}.zip" tp-agent.exe tp.exe
           else
-            tar czf "$GITHUB_WORKSPACE/dist/tp-agent-${{ matrix.target }}.tar.gz" tp-agent
+            tar czf "$GITHUB_WORKSPACE/dist/tp-agent-${{ matrix.target }}.tar.gz" tp-agent tp
           fi
           ls -la "$GITHUB_WORKSPACE/dist"
 

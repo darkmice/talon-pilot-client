@@ -1,8 +1,8 @@
 # Talon Pilot · tp-agent 一键安装(Windows / PowerShell)。
 #   irm https://agents.deeplan.ai/install.ps1 | iex
 #
-# 从 GitHub Release 下 tp-agent 装进用户目录并加入 PATH,随后自动准备默认的
-# Open Interpreter runtime,最后在可交互终端里自动登录。
+# 从 GitHub Release 下 tp-agent + 控制面辅助命令 tp 装进用户目录并加入 PATH,
+# 随后自动准备默认的 Open Interpreter runtime,最后在可交互终端里自动登录。
 $ErrorActionPreference = "Stop"
 
 $repo  = if ([string]::IsNullOrWhiteSpace($env:TP_AGENT_REPO)) { "darkmice/talon-pilot-client" } else { $env:TP_AGENT_REPO }
@@ -17,6 +17,12 @@ try {
   Write-Host "($asset)…" -ForegroundColor DarkGray
   Invoke-WebRequest -Uri $url -OutFile "$tmp\$asset"
   Expand-Archive -Path "$tmp\$asset" -DestinationPath $tmp -Force
+  if (-not (Test-Path "$tmp\tp-agent.exe" -PathType Leaf)) {
+    throw "安装包缺少 tp-agent.exe，拒绝安装"
+  }
+  if (-not (Test-Path "$tmp\tp.exe" -PathType Leaf)) {
+    throw "安装包缺少配套控制面命令 tp.exe，拒绝安装"
+  }
 
   $dest = if ([string]::IsNullOrWhiteSpace($env:TP_AGENT_INSTALL_DIR)) {
     Join-Path $env:LOCALAPPDATA "Programs\tp-agent"
@@ -24,6 +30,7 @@ try {
     $env:TP_AGENT_INSTALL_DIR
   }
   New-Item -ItemType Directory -Force -Path $dest | Out-Null
+  Move-Item -Force "$tmp\tp.exe" "$dest\tp.exe"
   Move-Item -Force "$tmp\tp-agent.exe" "$dest\tp-agent.exe"
 
   $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -34,8 +41,11 @@ try {
     Write-Host " (新开终端生效)" -ForegroundColor DarkGray
   }
   $bin = Join-Path $dest "tp-agent.exe"
+  $tpBin = Join-Path $dest "tp.exe"
   Write-Host "✓ " -ForegroundColor Green -NoNewline
   Write-Host "已安装: $bin"
+  Write-Host "✓ " -ForegroundColor Green -NoNewline
+  Write-Host "已安装: $tpBin"
 
   # Open Interpreter 是 Talon 的默认 runtime。让 tp-agent 做幂等 bootstrap:
   # 已有兼容的 `interpreter acp` 就复用,否则下载官方 checksum-backed release。
