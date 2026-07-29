@@ -21,11 +21,13 @@ Windows(PowerShell):
 irm https://agents.deeplan.ai/install.ps1 | iex
 ```
 
-安装器会先安装 `tp-agent`，再由 `tp-agent runtime ensure` 自动安装或复用
-支持 ACP 的 Open Interpreter，最后进入登录流程。若是受控环境需要显式跳过
-默认 runtime，可在安装前设置 `TP_SKIP_OPEN_INTERPRETER_INSTALL=1`。
+安装器会同时安装 `tp-agent` 与配套控制面命令 `tp`，再由
+`tp-agent runtime ensure` 自动安装或复用支持 ACP 的 Open Interpreter，
+最后进入登录流程。若是受控环境需要显式跳过默认 runtime，可在安装前设置
+`TP_SKIP_OPEN_INTERPRETER_INSTALL=1`。
 
-**手动下载**:到 [Releases](../../releases) 下对应平台的包,解压把 `tp-agent` 放进 PATH。
+**手动下载**:到 [Releases](../../releases) 下对应平台的包，解压后把
+`tp-agent` 和 `tp` 一起放进同一个 PATH 目录。
 (macOS arm64/x64 · Linux x64,glibc ≥ 2.35 · Windows x64)
 
 ## 注册到线上环境
